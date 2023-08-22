@@ -1,87 +1,52 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import energy_data_extractor
+from energy_data_extractor import EnergyData
+from tariff_extractor import EnergyTariff
+from battery_control import BatteryControl
 import energy_chart
 import energy_chart_seaborn
 from tabulate import tabulate
 
-# Generate an array of time intervals with 5-minute intervals for a 24-hour period
-t = np.arange(0, 24 * 60, 5)
-readings_per_hour = round(len(t)/24,0)
+# set source for energy bill data
+inverter_readings_path = '/Users/luke/Documents/1. Projects/2. Noah Energy/1. Research/1. Energy bills'
+chart_save_path = inverter_readings_path
 
-# set battery values    
+
+# set battery values
 battery_capacity = 8 # set battery capacity to 8kWh
 max_SOC = 1 * battery_capacity # set max SOC to 100% of capacity
 min_SOC = 0.04 * battery_capacity # set min SOC to 4% of capacity
 
-# find the s and h arrays from the energy bill data
-s, h, b_default, SOC_default, g_default, starting_SOC, chart_save_path = energy_data_extractor.extract_s_and_h(t)
+# Set time intervals in minutes
+time_intervals = '5T'
+# find the s and h arrays from the energy bill data. Set time intervals as X
+s, h, b_default, SOC_default, g_default, starting_SOC = EnergyData.extract_data(inverter_readings_path,time_intervals)
 
-# first tariff pair is a fixed import of 29p and fixed export of 15p (for solar only)
-i_1 = np.full(len(t),0.29)
-e_1 = np.full(len(t),0.15)
+# Generate an array of time intervals for a 24-hour period
+readings_per_hour = round(len(s)/24,0)
+t = np.arange(0, 24 * 60, 60/readings_per_hour)
 
-# second tariff pair is variable
-i_2 = np.zeros_like(t,dtype=float)
-e_2 = np.zeros_like(t,dtype=float)
-for i in range (1, len(t)):
-    if i >= 2 * readings_per_hour and i < 5 * readings_per_hour:
-        i_2[i] = 0.1854
-        e_2[i] = 0.0754
-    elif i >= 16 * readings_per_hour and i < 19 * readings_per_hour:
-        i_2[i] = 0.4326
-        e_2[i] = 0.3226
-    else:
-        i_2[i] = 0.309
-        e_2[i] = 0.199
-# interpolate the tariff pairs to ensure length matches the t variable
-i_2 = np.interp(np.linspace(0, len(i_2)-1, len(t)), np.arange(len(i_2)), i_2)
-e_2 = np.interp(np.linspace(0, len(e_2)-1, len(t)), np.arange(len(e_2)), e_2)
+# import energy tariffs from excel file that is saved in the same root folder as the inverter readings
+tariffs = EnergyTariff.read_arrays_from_excel(inverter_readings_path+'/2023-08-16 Energy tariffs.xlsx',t)
 
-# set tariff names
-tariff_names = ["Price cap and SEG", "Flux", "Original"]
+# Determine number of tariff pairs
+num_tariff_pairs = int(len(tariffs)/2)
+print(num_tariff_pairs)
+
+# assign tariffs and set tariff names
+i_1 = tariffs[0].values.flatten()
+e_1 = tariffs[0+num_tariff_pairs-1].values.flatten()
+first_tariff_name = tariffs[0].columns.name + ' + ' + tariffs[0+num_tariff_pairs-1].columns.name
+i_2 = tariffs[1].values.flatten()
+e_2 = tariffs[1+num_tariff_pairs-1].values.flatten()
+second_tariff_name = tariffs[1].columns.name + ' + ' + tariffs[1+num_tariff_pairs-1].columns.name
+i_3 = tariffs[2].values.flatten()
+e_3 = tariffs[2+num_tariff_pairs-1].values.flatten()
+third_tariff_name = tariffs[2].columns.name + ' + ' + tariffs[2+num_tariff_pairs-1].columns.name
+tariff_names = [first_tariff_name, second_tariff_name, third_tariff_name]
 
 # Define different battery control mechanisms
-# Each control mechanism can be represented by a function that takes t as input and returns the discharge rate b(t)
-def battery_control_mechanism_1(t,b,SOC):
-
-    for i in range(1, len(t)):
-        
-        b[i] = s[i] - h[i]
-
-        if SOC[i-1] + b[i] * 5 / 60 > max_SOC:
-            b[i] = (max_SOC - SOC[i-1]) * 60 / 5
-
-        if SOC[i-1] + b[i] * 5 / 60 < min_SOC:
-            b[i] = (min_SOC - SOC[i-1]) * 60 / 5
-
-        SOC[i] = SOC[i-1] + b[i] * 5 / 60  # Calculate the state of charge (SOC) based on the cumulative battery discharge rate
-
-    return b, SOC
-
-def battery_control_mechanism_2(t,b,SOC):
-
-    for i in range(1, len(t)):
-        if t[i] >= 2 * 60 and t[i] < 5 * 60:  # Between 2am and 5am
-            b[i] = 3 + s[i] - h[i] # Charge at 3 kW from the grid
-        elif t[i] >= 16 * 60 and t[i] < 19 * 60:  # Between 4pm and 7pm
-            b[i] = -3 + s[i] - h[i]  # Discharge at 3kW to grid
-        else:  # All other times
-            b[i] = s[i] - h[i]
-        
-        if SOC[i-1] + b[i] * 5 / 60 > max_SOC:
-            b[i] = (max_SOC - SOC[i-1]) * 60 / 5
-
-        if SOC[i-1] + b[i] * 5 / 60 < min_SOC:
-            b[i] = (min_SOC - SOC[i-1]) * 60 / 5
-
-        SOC[i] = SOC[i-1] + b[i] * 5 / 60  # Calculate the state of charge (SOC) based on the cumulative battery discharge rate
-
-    return b, SOC
-
-
-# Initialize variables to store the minimum energy bill and corresponding tariff-control mechanism pair
 min_energy_bill = float('inf')
 tariff_counter = 0
 
@@ -106,18 +71,15 @@ energy_bill_table = [["Tariff name", "Daily import bill (£)", "Daily export bil
                      [tariff_names[2], round(-np.sum(np.minimum(0, g_default) * i_1) / readings_per_hour, 2), 0, round(-np.sum(np.minimum(0, g_default) * i_1) / readings_per_hour, 2)]]
 
 # Iterate over each tariff and control mechanism combination
-for import_tariff, export_tariff, control_mechanism in [(i_1, e_1, battery_control_mechanism_1),
-                                                        (i_2, e_2, battery_control_mechanism_2)]:
+for import_tariff, export_tariff in [(i_1, e_1),(i_2, e_2)]:
 
     # Create separate b, g, and SOC arrays for each control mechanism
     b = np.zeros_like(t, dtype=float)
     SOC = np.zeros_like(t, dtype=float)
     SOC[0] = starting_SOC * max_SOC if tariff_counter == 0 else 0.1 * max_SOC
 
-    # Calculate the battery power and the battery SOC for the given control scheme
-    b, SOC = control_mechanism(t, b, SOC)
-
-    g = -h - b + s
+    # Calculate battery power, battery SOC, and grid draw for the given tariff
+    b, SOC, g = BatteryControl.find_power_and_SOC(s,h,min_SOC,max_SOC,import_tariff,export_tariff,readings_per_hour)
 
     # Calculate the energy bill based on the tariff and grid draw and divide by readings per hour
     import_energy_bill = -np.sum(np.minimum(0, g) * import_tariff) / readings_per_hour
@@ -141,15 +103,11 @@ SOC_arrays[2] = SOC_default
 # Print the output table
 print(tabulate(energy_bill_table, headers = 'firstrow', tablefmt='fancy_grid'), '\n')
 
-# chart the system behaviours
-# energy_chart.create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, 0, tariff_names, chart_save_path) # first tariff.
-# energy_chart.create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, 1, tariff_names, chart_save_path) # second tariff
-
 # print both tariff charts
 energy_chart_seaborn.create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, 0, tariff_names, chart_save_path)
 energy_chart_seaborn.create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, 1, tariff_names, chart_save_path)
 energy_chart_seaborn.create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, 2, tariff_names, chart_save_path)
 
-# print daily house consumption and soalr generaiton
+# print daily house consumption and solar generaiton
 print('House daily kWh consumption: ', np.sum(h)/readings_per_hour)
 print('Solar daily kWh generation: ', np.sum(s)/readings_per_hour)

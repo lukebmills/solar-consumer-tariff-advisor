@@ -25,7 +25,7 @@ time_intervals = '5T'
 # ------ Remainder of code
 
 # find the s and h arrays from the energy bill data
-s, h, b_default, SOC_default, g_default, starting_SOC, chart_save_path = EnergyData.extract_data(inverter_readings_path,time_intervals, battery_capacity)
+s, h, b_default, SOC_default, g_default, starting_SOC, chart_save_path = EnergyData.extract_data(inverter_readings_path,time_intervals)
 
 # Generate an array of time intervals for a 24-hour period
 readings_per_hour = round(len(s)/24,0)

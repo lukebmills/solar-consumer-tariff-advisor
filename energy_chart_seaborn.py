@@ -2,14 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-import seaborn.objects as so
 from scipy.ndimage.filters import gaussian_filter1d
-# import scipy.stats as stats
-# from scipy.interpolate import make_interp_spline, BSpline
-
 
 def create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, chart_select, tariff_names, chart_save_path):
-    
+
     # Convert t from minutes to hours
     t = t / 60
 
@@ -17,6 +13,7 @@ def create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, chart_select, tariff_n
     s = gaussian_filter1d(s,sigma=2)
     b_arrays = gaussian_filter1d(b_arrays,sigma=2)
     g_arrays = gaussian_filter1d(g_arrays,sigma=2)
+    SOC_arrays = gaussian_filter1d(SOC_arrays,sigma=2)
 
     power = np.append(np.append(np.append(s,-h),-b_arrays[chart_select]),g_arrays[chart_select])
     power_name = np.append(np.append(np.append(np.full(len(s),'Solar generation'),np.full(len(h),'House demand')),np.full(len(b_arrays[1]),'Battery power')),np.full(len(g_arrays[0]),'Grid load'))
@@ -30,7 +27,6 @@ def create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, chart_select, tariff_n
         }
     
     power_df = pd.DataFrame(power_df)
-
 
     SOC_df = {
         "Time": t,
@@ -52,7 +48,13 @@ def create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, chart_select, tariff_n
     # ax[0].fill_between(data=power_df_load,x="Time",y1="Power (kW)", y2=0,color='orange',alpha=0.3)
     ax[0].fill_between(data=power_df_grid,x="Time",y1="Power (kW)", y2=0,color='red',alpha=0.3)
 
-    ax[1].set_ylim(0)  # This sets the lower limit to 0
+    # set x axis ticks
+    ax[0].set_xlim(0,24)
+    ax[0].set_xticks(np.arange(0,24,4))
+    ax[1].set_xlim(0, 24)
+    ax[1].set_xticks(np.arange(0, 24, 4))
+
+    ax[1].set_ylim(0)  # Set y axis lower limit to 0
     ax[1].fill_between(data=SOC_df,x="Time",y1="Battery SOC (kWh)", y2=0,color='black',alpha=0.3)
 
     # Set titles for subplots
@@ -60,9 +62,8 @@ def create_chart(s, h, t, b_arrays, g_arrays, SOC_arrays, chart_select, tariff_n
     ax[1].set_title("Battery state of charge")
 
 
-    # Show the plot (optional)
     fig.tight_layout()
-    # plt.show()
-    plt.savefig(chart_save_path + tariff_names[chart_select] + '.png')
+    # save the plot
+    plt.savefig(chart_save_path + '/' + tariff_names[chart_select] + '.png')
 
 

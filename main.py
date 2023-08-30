@@ -37,60 +37,56 @@ tariffs = EnergyTariff.read_arrays_from_excel(inverter_readings_path+tariff_file
 # Determine number of tariff pairs
 num_tariff_pairs = int(len(tariffs)/2)
 
-# assign tariffs and set tariff names
-i_1 = tariffs[0].values.flatten()
-e_1 = tariffs[0+num_tariff_pairs].values.flatten()
-first_tariff_name = tariffs[0].columns.name + ' + ' + tariffs[0+num_tariff_pairs].columns.name
-i_2 = tariffs[1].values.flatten()
-e_2 = tariffs[1+num_tariff_pairs].values.flatten()
-second_tariff_name = tariffs[1].columns.name + ' + ' + tariffs[1+num_tariff_pairs].columns.name
-i_3 = tariffs[2].values.flatten()
-e_3 = tariffs[2+num_tariff_pairs].values.flatten()
-third_tariff_name = tariffs[2].columns.name + ' + ' + tariffs[2+num_tariff_pairs].columns.name
-tariff_names = [first_tariff_name, second_tariff_name, third_tariff_name]
+# Initialize lists to store import tariffs, export tariffs, and tariff names
+import_tariffs = []
+export_tariffs = []
+tariff_names = []
 
-# Initialize b, g, and SOC arrays
-b_arrays = [np.zeros_like(t, dtype=float), np.zeros_like(t, dtype=float), np.zeros_like(t, dtype=float)]
-g_arrays = [np.zeros_like(t, dtype=float), np.zeros_like(t, dtype=float), np.zeros_like(t, dtype=float)]
-SOC_arrays = [np.zeros_like(t, dtype=float), np.zeros_like(t, dtype=float), np.zeros_like(t, dtype=float)]
+# Loop through the tariffs and assign values
+for i in range(num_tariff_pairs):
+    import_tariff = tariffs[i].values.flatten()
+    export_tariff = tariffs[i + num_tariff_pairs].values.flatten()
+    tariff_name = tariffs[i].columns.name + ' + ' + tariffs[i + num_tariff_pairs].columns.name
 
-# assign default battery and grid load arrays to the arrays sets
-b_arrays[0] = b_default
-g_arrays[0] = g_default
-SOC_arrays[0] = SOC_default * battery_capacity # convert from % to kWh
+    import_tariffs.append(import_tariff)
+    export_tariffs.append(export_tariff)
+    tariff_names.append(tariff_name)
 
-# Set up the energy bill table
-energy_bill_table = [["Tariff name", "Daily import bill (£)", "Daily export bill (£)", "Total daily bill (£)"],
-                     [tariff_names[0], round(-np.sum(np.maximum(0, g_default) * e_1) / readings_per_hour, 2), 0, round(-np.sum(np.maximum(0, g_default) * e_1) / readings_per_hour, 2)],
-                     [tariff_names[1], None, None, None],
-                     [tariff_names[2], None, None, None]]
+# Initialize b, g, and SOC lists
+b_arrays = []
+g_arrays = []
+SOC_arrays = []
+
+# Set up the energy bill table with headers
+energy_bill_table = [["Tariff name", "Daily import bill (£)", "Daily export bill (£)", "Total daily bill (£)"]]
 
 # skip the first tariff because it uses the existing battery control logic
-tariff_counter = 1
+tariff_counter = 0
 
 # Iterate over the second and third energy tariffs
-for import_tariff, export_tariff in [(i_2, e_2),(i_3, e_3)]:
+for import_tariff, export_tariff, tariff_name in zip(import_tariffs, export_tariffs, tariff_names):
 
-    # Create separate b, g, and SOC arrays for each control mechanism
-    b = np.zeros_like(t, dtype=float)
-    SOC = np.zeros_like(t, dtype=float)
-    SOC[0] = starting_SOC * max_SOC if tariff_counter == 0 else 0.1 * max_SOC
-
-    # Calculate battery power, battery SOC, and grid draw for the given tariff
-    b, SOC, g = BatteryControl.find_power_and_SOC(s,h,min_SOC,max_SOC,import_tariff,export_tariff,readings_per_hour, battery_max_charge, battery_max_discharge)
+    # set the battery power + SOC and grid draw to default behaviour for the first tariff
+    if tariff_counter == 0:
+        b = b_default
+        g = g_default
+        SOC = SOC_default * battery_capacity # convert from % to kWh
+    else:
+        # Calculate battery power, battery SOC, and grid draw for the given tariff
+        b, SOC, g = BatteryControl.find_power_and_SOC(s,h,min_SOC,max_SOC,import_tariff,export_tariff,readings_per_hour, battery_max_charge, battery_max_discharge)
 
     # Calculate the energy bill based on the tariff and grid draw and divide by readings per hour
-    import_energy_bill = -np.sum(np.minimum(0, g) * import_tariff) / readings_per_hour
-    export_energy_bill = -np.sum(np.maximum(0, g) * export_tariff) / readings_per_hour
+    import_energy_bill = -round(np.sum(np.minimum(0, g) * import_tariff) / readings_per_hour,2)
+    export_energy_bill = -round(np.sum(np.maximum(0, g) * export_tariff) / readings_per_hour,2)
     energy_bill = import_energy_bill + export_energy_bill
 
     # add the energy bills to the table
-    energy_bill_table[tariff_counter+1] = [tariff_names[tariff_counter], round(import_energy_bill,2), round(export_energy_bill,2), round(energy_bill,2)]
+    energy_bill_table.append([tariff_name, import_energy_bill, export_energy_bill, energy_bill])
 
     # add the battery and grid load arrays to their respective array sets
-    b_arrays[tariff_counter] = b
-    g_arrays[tariff_counter] = g
-    SOC_arrays[tariff_counter] = SOC
+    b_arrays.append(b)
+    g_arrays.append(g)
+    SOC_arrays.append(SOC)
 
     tariff_counter = tariff_counter + 1
 

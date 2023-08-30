@@ -6,10 +6,15 @@ class BatteryControl:
     
     @classmethod
     def find_power_and_SOC(cls, s, h, min_SOC, max_SOC, import_tariff, export_tariff, readings_per_hour, max_charge, max_discharge):
+
+        # calculate average tariff value for each day
         average_import_tariff = import_tariff.mean()
         average_export_tariff = export_tariff.mean()
+
+        # set invervals for data readings, in minutes
         reading_intervals = 60/readings_per_hour
 
+        # initialise battery power and SOC arrays
         b = np.zeros_like(s,dtype = float)
         SOC = np.zeros_like(s, dtype=float)
 
@@ -45,7 +50,8 @@ class BatteryControl:
                     b[i] = -max_discharge
                 else:
                     b[i] = s[i] - h[i]
-                # controls to ensure the battery SOC doesn't exceed the limits
+
+                # set controls to ensure the battery SOC doesn't exceed the limits
                 if SOC[i - 1] + b[i] * reading_intervals / 60 > max_SOC:
                     b[i] = (max_SOC - SOC[i - 1]) * 60 / reading_intervals
 

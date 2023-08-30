@@ -61,7 +61,7 @@ SOC_arrays[0] = SOC_default * battery_capacity # convert from % to kWh
 
 # Set up the energy bill table
 energy_bill_table = [["Tariff name", "Daily import bill (£)", "Daily export bill (£)", "Total daily bill (£)"],
-                     [tariff_names[0], , 0, round(-np.sum(np.maximum(0, g_default) * e_1) / readings_per_hour, 2)],
+                     [tariff_names[0], round(-np.sum(np.maximum(0, g_default) * e_1) / readings_per_hour, 2), 0, round(-np.sum(np.maximum(0, g_default) * e_1) / readings_per_hour, 2)],
                      [tariff_names[1], None, None, None],
                      [tariff_names[2], None, None, None]]
 

@@ -8,7 +8,7 @@ from tabulate import tabulate
 #------- User parameters
 
 # set source for energy bill data
-inverter_readings_path = '/Users/luke/Documents/1. Projects/2. Noah Energy/1. Research/1. Energy bills'
+tariff_and_inverter_readings_path = '/Users/luke/GitHub'
 # set name of tariff file
 tariff_file_name = '/2023-08-16 Energy tariffs.xlsx'
 
@@ -25,14 +25,14 @@ time_intervals = '5T'
 # ------ Remainder of code
 
 # find the s and h arrays from the energy bill data
-s, h, b_default, SOC_default, g_default, starting_SOC, chart_save_path = EnergyData.extract_data(inverter_readings_path,time_intervals)
+s, h, b_default, SOC_default, g_default, starting_SOC, chart_save_path = EnergyData.extract_data(tariff_and_inverter_readings_path,time_intervals)
 
 # Generate an array of time intervals for a 24-hour period
 readings_per_hour = round(len(s)/24,0)
 t = np.arange(0, 24 * 60, 60/readings_per_hour)
 
 # import energy tariffs from excel file that is saved in the same root folder as the inverter readings
-tariffs = EnergyTariff.read_arrays_from_excel(inverter_readings_path+tariff_file_name,t)
+tariffs = EnergyTariff.read_arrays_from_excel(tariff_and_inverter_readings_path+tariff_file_name,t)
 
 # Determine number of tariff pairs
 num_tariff_pairs = int(len(tariffs)/2)

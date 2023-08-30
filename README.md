@@ -1,4 +1,4 @@
-# energy-bills
+# solar-consumer-tariff-advisor
 
 Description
 This project reads downloaded data from battery-connected SolarEdge, Solis, and GivEnergy inverters and recommends the optimal energy tariff and battery control scheme based on the energy consumption and solar generation. It requires daily energy inverter data in excel format, energy tariffs in excel format, and battery size and charge/discharge rates as variables. It outputs an energy profile chart for each energy tariff <> battery control scheme and estimate daily energy bills for each. 
